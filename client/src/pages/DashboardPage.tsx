@@ -50,6 +50,16 @@ export default function DashboardPage() {
             >
               Categories
             </button>
+            <button
+              onClick={async () => {
+                await api.logout();
+                queryClient.clear();
+                navigate('/login');
+              }}
+              className="text-xs text-gray-400 hover:text-red-500 transition-colors cursor-pointer"
+            >
+              Logout
+            </button>
           </div>
         </div>
       </header>
