@@ -1,4 +1,4 @@
-import { Expense, AuthStatus } from '../types';
+import type { Expense, AuthStatus } from '../types';
 
 const BASE = '/api';
 
