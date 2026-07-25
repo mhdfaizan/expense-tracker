@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import { getAccount, updateAccountTokens, updateAccountFolderId, updateAccountSpreadsheetId } from '../db';
 
 const SCOPES = [
+  'openid',
   'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/drive.file',
 ];

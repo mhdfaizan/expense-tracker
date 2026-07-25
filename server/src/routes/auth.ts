@@ -27,6 +27,12 @@ router.get('/callback', async (req: Request, res: Response) => {
 
     const { tokens, googleUserId } = await exchangeCode(code);
     if (!tokens.access_token || !tokens.refresh_token || !googleUserId) {
+      console.error('Token exchange failed:', {
+        hasAccessToken: !!tokens.access_token,
+        hasRefreshToken: !!tokens.refresh_token,
+        hasIdToken: !!tokens.id_token,
+        hasGoogleUserId: !!googleUserId,
+      });
       return res.status(400).json({ error: 'Failed to get tokens. Ensure offline access is enabled.' });
     }
 
