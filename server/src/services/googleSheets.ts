@@ -2,7 +2,6 @@ import { google } from 'googleapis';
 import { getAccount, updateAccountTokens, updateAccountFolderId, updateAccountSpreadsheetId } from '../db';
 
 const SCOPES = [
-  'openid',
   'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/drive.file',
 ];
@@ -61,6 +60,9 @@ export async function exchangeCode(code: string) {
   if (tokens.id_token) {
     const payload = JSON.parse(Buffer.from(tokens.id_token.split('.')[1], 'base64').toString());
     googleUserId = payload.sub;
+  } else if (tokens.access_token) {
+    const tokenInfo = await oauth2Client.getTokenInfo(tokens.access_token);
+    googleUserId = tokenInfo.sub;
   }
 
   return { tokens, googleUserId };
