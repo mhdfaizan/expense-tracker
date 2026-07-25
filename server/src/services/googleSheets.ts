@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { getAccount, updateAccountTokens } from '../db';
+import { getAccount, updateAccountTokens, updateAccountFolderId, updateAccountSpreadsheetId } from '../db';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
@@ -63,18 +63,29 @@ export async function createExpenseSheet(googleUserId: string): Promise<{ spread
   const account = await getAccount(googleUserId);
   if (!account) throw new Error('No account found');
 
-  if (account.spreadsheet_id) {
-    return { spreadsheetId: account.spreadsheet_id, folderId: account.folder_id };
-  }
-
   const oauth2Client = getOAuth2Client();
   oauth2Client.setCredentials({
     access_token: account.access_token,
     refresh_token: account.refresh_token,
   });
+  const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
+
+  // If we have a stored sheet ID, verify it still exists
+  if (account.spreadsheet_id) {
+    try {
+      await sheets.spreadsheets.get({
+        spreadsheetId: account.spreadsheet_id,
+        fields: 'spreadsheetId',
+      });
+      return { spreadsheetId: account.spreadsheet_id, folderId: account.folder_id };
+    } catch {
+      // Sheet was deleted — clear stale IDs and create fresh
+      await updateAccountSpreadsheetId(googleUserId, '');
+      if (account.folder_id) await updateAccountFolderId(googleUserId, '');
+    }
+  }
 
   const drive = google.drive({ version: 'v3', auth: oauth2Client });
-  const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
 
   // Create a dedicated folder
   const folder = await drive.files.create({
