@@ -1,9 +1,18 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { api } from '../api/client';
 import GoogleButton from '../components/GoogleButton';
 
 export default function LoginPage() {
   const [loading, setLoading] = useState(false);
+  const [searchParams] = useSearchParams();
+  const [denied, setDenied] = useState(false);
+
+  useEffect(() => {
+    if (searchParams.get('error') === 'access_denied') {
+      setDenied(true);
+    }
+  }, [searchParams]);
 
   const handleConnect = async () => {
     setLoading(true);
@@ -29,6 +38,11 @@ export default function LoginPage() {
           </p>
         </div>
         <GoogleButton onClick={handleConnect} loading={loading} />
+        {denied && (
+          <p className="text-xs text-red-500 mt-3">
+            Access was denied. Both permissions are required to use the app.
+          </p>
+        )}
         <p className="text-xs text-gray-400 mt-4">
           Your data is stored in your own Google Drive
         </p>

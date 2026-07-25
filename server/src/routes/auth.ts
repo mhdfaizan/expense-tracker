@@ -11,7 +11,11 @@ router.get('/url', (_req: Request, res: Response) => {
 
 router.get('/callback', async (req: Request, res: Response) => {
   try {
-    const { code } = req.query;
+    const { code, error: oauthError } = req.query;
+    if (oauthError) {
+      const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
+      return res.redirect(`${clientUrl}/login?error=access_denied`);
+    }
     if (!code || typeof code !== 'string') {
       return res.status(400).json({ error: 'Missing auth code' });
     }
