@@ -51,9 +51,9 @@ router.post('/logout', (req: Request, res: Response) => {
   });
 });
 
-router.get('/status', (req: Request, res: Response) => {
+router.get('/status', async (req: Request, res: Response) => {
   if (req.session?.sessionId) {
-    const session = getSession(req.session.sessionId);
+    const session = await getSession(req.session.sessionId);
     res.json({ authenticated: true, hasSpreadsheet: !!session?.spreadsheet_id });
   } else {
     res.json({ authenticated: false });

@@ -33,7 +33,7 @@ export async function exchangeCode(code: string) {
 }
 
 export async function getAuthenticatedClient(sessionId: string) {
-  const session = getSession(sessionId);
+  const session = await getSession(sessionId);
   if (!session) throw new Error('No session found');
 
   const oauth2Client = getOAuth2Client();
@@ -53,7 +53,7 @@ export async function getAuthenticatedClient(sessionId: string) {
 
 export async function createExpenseSheet(sessionId: string): Promise<string> {
   const oauth2Client = getOAuth2Client();
-  const session = getSession(sessionId);
+  const session = await getSession(sessionId);
   if (!session) throw new Error('No session found');
 
   oauth2Client.setCredentials({
@@ -102,7 +102,7 @@ export async function appendExpense(
   id: string
 ) {
   const sheets = await getAuthenticatedClient(sessionId);
-  const session = getSession(sessionId);
+  const session = await getSession(sessionId);
   if (!session?.spreadsheet_id) throw new Error('No spreadsheet found');
 
   await sheets.spreadsheets.values.append({
@@ -116,7 +116,7 @@ export async function appendExpense(
 
 export async function getExpenses(sessionId: string, dateFilter?: string) {
   const sheets = await getAuthenticatedClient(sessionId);
-  const session = getSession(sessionId);
+  const session = await getSession(sessionId);
   if (!session?.spreadsheet_id) return [];
 
   const response = await sheets.spreadsheets.values.get({
@@ -144,7 +144,7 @@ export async function getExpenses(sessionId: string, dateFilter?: string) {
 
 export async function deleteExpense(sessionId: string, expenseId: string) {
   const sheets = await getAuthenticatedClient(sessionId);
-  const session = getSession(sessionId);
+  const session = await getSession(sessionId);
   if (!session?.spreadsheet_id) throw new Error('No spreadsheet found');
 
   const response = await sheets.spreadsheets.values.get({
@@ -164,7 +164,7 @@ export async function deleteExpense(sessionId: string, expenseId: string) {
 
 export async function getCategories(sessionId: string) {
   const sheets = await getAuthenticatedClient(sessionId);
-  const session = getSession(sessionId);
+  const session = await getSession(sessionId);
   if (!session?.spreadsheet_id) return DEFAULT_CATEGORIES;
 
   const response = await sheets.spreadsheets.values.get({
@@ -179,7 +179,7 @@ export async function getCategories(sessionId: string) {
 
 export async function addCategory(sessionId: string, name: string) {
   const sheets = await getAuthenticatedClient(sessionId);
-  const session = getSession(sessionId);
+  const session = await getSession(sessionId);
   if (!session?.spreadsheet_id) throw new Error('No spreadsheet found');
 
   await sheets.spreadsheets.values.append({
@@ -193,7 +193,7 @@ export async function addCategory(sessionId: string, name: string) {
 
 export async function deleteCategory(sessionId: string, name: string) {
   const sheets = await getAuthenticatedClient(sessionId);
-  const session = getSession(sessionId);
+  const session = await getSession(sessionId);
   if (!session?.spreadsheet_id) throw new Error('No spreadsheet found');
 
   const response = await sheets.spreadsheets.values.get({
