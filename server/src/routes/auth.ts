@@ -1,7 +1,7 @@
 import { Router, Request, Response } from 'express';
 import { v4 as uuidv4 } from 'uuid';
 import { exchangeCode, getAuthUrl, createExpenseSheet } from '../services/googleSheets';
-import { saveSession, getSession } from '../db';
+import { saveSession, getSession, updateSpreadsheetId } from '../db';
 
 const router = Router();
 
@@ -26,7 +26,7 @@ router.get('/callback', async (req: Request, res: Response) => {
     }
 
     const sessionId = uuidv4();
-    saveSession(
+    await saveSession(
       sessionId,
       tokens.access_token,
       tokens.refresh_token,
@@ -34,6 +34,7 @@ router.get('/callback', async (req: Request, res: Response) => {
     );
 
     const spreadsheetId = await createExpenseSheet(sessionId);
+    await updateSpreadsheetId(sessionId, spreadsheetId);
 
     req.session.sessionId = sessionId;
 

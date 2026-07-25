@@ -64,6 +64,22 @@ export async function createExpenseSheet(sessionId: string): Promise<string> {
   const drive = google.drive({ version: 'v3', auth: oauth2Client });
   const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
 
+  // Check if user already has an Expense Tracker spreadsheet
+  const existing = await drive.files.list({
+    q: "name='Expense Tracker' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
+    fields: 'files(id, name)',
+    spaces: 'drive',
+  });
+
+  if (existing.data.files && existing.data.files.length > 0) {
+    const existingId = existing.data.files[0].id!;
+    const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId: existingId });
+    const sheetNames = sheetInfo.data.sheets?.map(s => s.properties?.title) || [];
+    if (sheetNames.includes('Expenses') && sheetNames.includes('Categories')) {
+      return existingId;
+    }
+  }
+
   const spreadsheet = await sheets.spreadsheets.create({
     requestBody: {
       properties: { title: 'Expense Tracker' },
