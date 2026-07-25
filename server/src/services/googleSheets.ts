@@ -59,13 +59,12 @@ export async function getAuthenticatedClient(googleUserId: string) {
   return google.sheets({ version: 'v4', auth: oauth2Client });
 }
 
-export async function createExpenseSheet(googleUserId: string): Promise<string> {
+export async function createExpenseSheet(googleUserId: string): Promise<{ spreadsheetId: string; folderId: string | null }> {
   const account = await getAccount(googleUserId);
   if (!account) throw new Error('No account found');
 
-  // If user already has a spreadsheet, return it
   if (account.spreadsheet_id) {
-    return account.spreadsheet_id;
+    return { spreadsheetId: account.spreadsheet_id, folderId: account.folder_id };
   }
 
   const oauth2Client = getOAuth2Client();
@@ -74,7 +73,18 @@ export async function createExpenseSheet(googleUserId: string): Promise<string> 
     refresh_token: account.refresh_token,
   });
 
+  const drive = google.drive({ version: 'v3', auth: oauth2Client });
   const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
+
+  // Create a dedicated folder
+  const folder = await drive.files.create({
+    requestBody: {
+      name: 'Expense Tracker',
+      mimeType: 'application/vnd.google-apps.folder',
+    },
+    fields: 'id',
+  });
+  const folderId = folder.data.id!;
 
   const spreadsheet = await sheets.spreadsheets.create({
     requestBody: {
@@ -87,6 +97,14 @@ export async function createExpenseSheet(googleUserId: string): Promise<string> 
   });
 
   const spreadsheetId = spreadsheet.data.spreadsheetId!;
+
+  // Move the spreadsheet into the folder
+  await drive.files.update({
+    fileId: spreadsheetId,
+    addParents: folderId,
+    removeParents: 'root',
+    fields: 'id, parents',
+  });
 
   await sheets.spreadsheets.values.update({
     spreadsheetId,
@@ -102,7 +120,7 @@ export async function createExpenseSheet(googleUserId: string): Promise<string> 
     requestBody: { values: DEFAULT_CATEGORIES.map((name) => [name]) },
   });
 
-  return spreadsheetId;
+  return { spreadsheetId, folderId };
 }
 
 export async function appendExpense(

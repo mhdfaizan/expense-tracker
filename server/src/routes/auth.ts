@@ -1,6 +1,6 @@
 import { Router, Request, Response } from 'express';
 import { exchangeCode, getAuthUrl, createExpenseSheet } from '../services/googleSheets';
-import { saveAccount, getAccount, updateAccountSpreadsheetId } from '../db';
+import { saveAccount, getAccount, updateAccountSpreadsheetId, updateAccountFolderId } from '../db';
 
 const router = Router();
 
@@ -37,8 +37,9 @@ router.get('/callback', async (req: Request, res: Response) => {
       tokens.expiry_date ? Math.floor((tokens.expiry_date - Date.now()) / 1000) : 3600
     );
 
-    const spreadsheetId = await createExpenseSheet(googleUserId);
+    const { spreadsheetId, folderId } = await createExpenseSheet(googleUserId);
     await updateAccountSpreadsheetId(googleUserId, spreadsheetId);
+    if (folderId) await updateAccountFolderId(googleUserId, folderId);
 
     req.session.googleUserId = googleUserId;
 

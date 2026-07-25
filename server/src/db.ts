@@ -41,9 +41,14 @@ async function getDb(): Promise<SqlJsDatabase> {
         refresh_token TEXT NOT NULL,
         token_expiry INTEGER NOT NULL,
         spreadsheet_id TEXT,
+        folder_id TEXT,
         created_at TEXT DEFAULT (datetime('now'))
       )
     `);
+    // Add folder_id column if upgrading from older schema
+    try {
+      db.run('ALTER TABLE accounts ADD COLUMN folder_id TEXT');
+    } catch {} // column already exists
     saveDb();
   }
   return db;
@@ -79,6 +84,7 @@ export async function getAccount(googleUserId: string) {
     refresh_token: string;
     token_expiry: number;
     spreadsheet_id: string | null;
+    folder_id: string | null;
   } | undefined;
 }
 
@@ -92,5 +98,11 @@ export async function updateAccountTokens(googleUserId: string, accessToken: str
 export async function updateAccountSpreadsheetId(googleUserId: string, spreadsheetId: string) {
   const d = await getDb();
   d.run('UPDATE accounts SET spreadsheet_id = ? WHERE google_user_id = ?', [spreadsheetId, googleUserId]);
+  saveDb();
+}
+
+export async function updateAccountFolderId(googleUserId: string, folderId: string) {
+  const d = await getDb();
+  d.run('UPDATE accounts SET folder_id = ? WHERE google_user_id = ?', [folderId, googleUserId]);
   saveDb();
 }
