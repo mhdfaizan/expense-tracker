@@ -4,6 +4,8 @@ import { saveAccount, getAccount, updateAccountSpreadsheetId, updateAccountFolde
 
 const router = Router();
 
+const CLIENT_URL = process.env.CLIENT_URL || 'http://localhost:5173';
+
 declare module 'express-session' {
   interface SessionData {
     googleUserId?: string;
@@ -18,11 +20,10 @@ router.get('/callback', async (req: Request, res: Response) => {
   try {
     const { code, error: oauthError } = req.query;
     if (oauthError) {
-      const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-      return res.redirect(`${clientUrl}/login?error=access_denied`);
+      return res.redirect(`${CLIENT_URL}/login?error=access_denied`);
     }
     if (!code || typeof code !== 'string') {
-      return res.status(400).json({ error: 'Missing auth code' });
+      return res.redirect(`${CLIENT_URL}/login?error=missing_code`);
     }
 
     const { tokens, googleUserId } = await exchangeCode(code);
@@ -33,7 +34,7 @@ router.get('/callback', async (req: Request, res: Response) => {
         hasIdToken: !!tokens.id_token,
         hasGoogleUserId: !!googleUserId,
       });
-      return res.status(400).json({ error: 'Failed to get tokens. Ensure offline access is enabled.' });
+      return res.redirect(`${CLIENT_URL}/login?error=token_exchange_failed`);
     }
 
     await saveAccount(
@@ -49,11 +50,11 @@ router.get('/callback', async (req: Request, res: Response) => {
 
     req.session.googleUserId = googleUserId;
 
-    const clientUrl = process.env.CLIENT_URL || 'http://localhost:5173';
-    res.redirect(`${clientUrl}/dashboard`);
+    console.log('Auth callback succeeded for user:', googleUserId.substring(0, 8) + '...');
+    res.redirect(`${CLIENT_URL}/dashboard`);
   } catch (error) {
     console.error('Auth callback error:', error);
-    res.status(500).json({ error: 'Authentication failed' });
+    res.redirect(`${CLIENT_URL}/login?error=auth_failed`);
   }
 });
 
@@ -64,8 +65,11 @@ router.post('/logout', (req: Request, res: Response) => {
 });
 
 router.get('/status', async (req: Request, res: Response) => {
-  if (req.session?.googleUserId) {
-    const account = await getAccount(req.session.googleUserId);
+  const hasSession = !!req.session?.googleUserId;
+  console.log('Auth status check:', { hasSession, googleUserId: hasSession ? req.session!.googleUserId!.substring(0, 8) + '...' : null });
+  if (hasSession) {
+    const account = await getAccount(req.session.googleUserId!);
+    console.log('Account lookup result:', { found: !!account });
     res.json({ authenticated: true, hasSpreadsheet: !!account?.spreadsheet_id });
   } else {
     res.json({ authenticated: false });

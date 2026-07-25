@@ -4,6 +4,7 @@ import { getAccount, updateAccountTokens, updateAccountFolderId, updateAccountSp
 const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/drive.file',
+  'https://www.googleapis.com/auth/userinfo.email',
 ];
 
 const DEFAULT_CATEGORIES = ['Food', 'Transport', 'Utilities', 'Entertainment', 'Shopping', 'Other'];
@@ -61,8 +62,11 @@ export async function exchangeCode(code: string) {
     const payload = JSON.parse(Buffer.from(tokens.id_token.split('.')[1], 'base64').toString());
     googleUserId = payload.sub;
   } else if (tokens.access_token) {
-    const tokenInfo = await oauth2Client.getTokenInfo(tokens.access_token);
-    googleUserId = tokenInfo.sub;
+    // Fallback: use the userinfo API to get the user's Google ID
+    oauth2Client.setCredentials({ access_token: tokens.access_token });
+    const oauth2 = google.oauth2({ version: 'v2', auth: oauth2Client });
+    const { data } = await oauth2.userinfo.get();
+    googleUserId = data.id ?? undefined;
   }
 
   return { tokens, googleUserId };
