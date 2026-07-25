@@ -2,6 +2,7 @@ import { google } from 'googleapis';
 import { getAccount, updateAccountTokens, updateAccountFolderId, updateAccountSpreadsheetId } from '../db';
 
 const SCOPES = [
+  'openid',
   'https://www.googleapis.com/auth/spreadsheets',
   'https://www.googleapis.com/auth/drive.file',
   'https://www.googleapis.com/auth/userinfo.email',
@@ -23,8 +24,9 @@ async function acquireCreationLock(googleUserId: string): Promise<() => void> {
   return release!;
 }
 
-function releaseCreationLock(googleUserId: string) {
+function releaseCreationLock(googleUserId: string, release: () => void) {
   creationLocks.delete(googleUserId);
+  release();
 }
 
 function getOAuth2Client() {
@@ -169,7 +171,7 @@ export async function createExpenseSheet(googleUserId: string): Promise<{ spread
 
     return { spreadsheetId, folderId };
   } finally {
-    releaseCreationLock(googleUserId);
+    releaseCreationLock(googleUserId, release);
   }
 }
 
