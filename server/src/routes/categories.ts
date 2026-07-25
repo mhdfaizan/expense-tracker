@@ -8,7 +8,7 @@ router.use(requireAuth);
 
 router.get('/', async (req: Request, res: Response) => {
   try {
-    const data = await getCategories(req.session.sessionId!);
+    const data = await getCategories(req.session.googleUserId!);
     res.json(data);
   } catch (error) {
     console.error('Error fetching categories:', error);
@@ -21,7 +21,7 @@ router.post('/', async (req: Request, res: Response) => {
     const { name } = req.body;
     if (!name) return res.status(400).json({ error: 'Name is required' });
 
-    await addCategory(req.session.sessionId!, name);
+    await addCategory(req.session.googleUserId!, name);
     res.status(201).json({ name });
   } catch (error) {
     console.error('Error adding category:', error);
@@ -31,7 +31,8 @@ router.post('/', async (req: Request, res: Response) => {
 
 router.delete('/:name', async (req: Request, res: Response) => {
   try {
-    await deleteCategory(req.session.sessionId!, req.params.name);
+    const name = req.params.name as string;
+    await deleteCategory(req.session.googleUserId!, name);
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting category:', error);

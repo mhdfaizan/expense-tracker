@@ -10,7 +10,7 @@ router.use(requireAuth);
 router.get('/', async (req: Request, res: Response) => {
   try {
     const dateFilter = req.query.date as string | undefined;
-    const data = await getExpenses(req.session.sessionId!, dateFilter);
+    const data = await getExpenses(req.session.googleUserId!, dateFilter);
     res.json(data);
   } catch (error) {
     console.error('Error fetching expenses:', error);
@@ -28,7 +28,7 @@ router.post('/', async (req: Request, res: Response) => {
     const expenseDate = date || new Date().toISOString().split('T')[0];
     const id = uuidv4();
 
-    await appendExpense(req.session.sessionId!, expenseDate, item, cost, category, id);
+    await appendExpense(req.session.googleUserId!, expenseDate, item, cost, category, id);
     res.status(201).json({ id, date: expenseDate, item, cost, category });
   } catch (error) {
     console.error('Error adding expense:', error);
@@ -38,7 +38,8 @@ router.post('/', async (req: Request, res: Response) => {
 
 router.delete('/:id', async (req: Request, res: Response) => {
   try {
-    await deleteExpense(req.session.sessionId!, req.params.id);
+    const id = req.params.id as string;
+    await deleteExpense(req.session.googleUserId!, id);
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting expense:', error);

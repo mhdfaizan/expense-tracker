@@ -34,9 +34,9 @@ async function getDb(): Promise<SqlJsDatabase> {
       db = new SQL.Database();
     }
     db.run(`
-      CREATE TABLE IF NOT EXISTS sessions (
+      CREATE TABLE IF NOT EXISTS accounts (
         id INTEGER PRIMARY KEY AUTOINCREMENT,
-        session_id TEXT UNIQUE NOT NULL,
+        google_user_id TEXT UNIQUE NOT NULL,
         access_token TEXT NOT NULL,
         refresh_token TEXT NOT NULL,
         token_expiry INTEGER NOT NULL,
@@ -49,8 +49,8 @@ async function getDb(): Promise<SqlJsDatabase> {
   return db;
 }
 
-export async function saveSession(
-  sessionId: string,
+export async function saveAccount(
+  googleUserId: string,
   accessToken: string,
   refreshToken: string,
   expiresIn: number
@@ -58,16 +58,17 @@ export async function saveSession(
   const d = await getDb();
   const expiry = Math.floor(Date.now() / 1000) + expiresIn;
   d.run(
-    'INSERT OR REPLACE INTO sessions (session_id, access_token, refresh_token, token_expiry) VALUES (?, ?, ?, ?)',
-    [sessionId, accessToken, refreshToken, expiry]
+    `INSERT OR REPLACE INTO accounts (google_user_id, access_token, refresh_token, token_expiry)
+     VALUES (?, ?, ?, ?)`,
+    [googleUserId, accessToken, refreshToken, expiry]
   );
   saveDb();
 }
 
-export async function getSession(sessionId: string) {
+export async function getAccount(googleUserId: string) {
   const d = await getDb();
-  const stmt = d.prepare('SELECT * FROM sessions WHERE session_id = ?');
-  stmt.bind([sessionId]);
+  const stmt = d.prepare('SELECT * FROM accounts WHERE google_user_id = ?');
+  stmt.bind([googleUserId]);
   let row: Record<string, any> | undefined;
   if (stmt.step()) {
     row = stmt.getAsObject() as Record<string, any>;
@@ -81,15 +82,15 @@ export async function getSession(sessionId: string) {
   } | undefined;
 }
 
-export async function updateTokens(sessionId: string, accessToken: string, expiresIn: number) {
+export async function updateAccountTokens(googleUserId: string, accessToken: string, expiresIn: number) {
   const d = await getDb();
   const expiry = Math.floor(Date.now() / 1000) + expiresIn;
-  d.run('UPDATE sessions SET access_token = ?, token_expiry = ? WHERE session_id = ?', [accessToken, expiry, sessionId]);
+  d.run('UPDATE accounts SET access_token = ?, token_expiry = ? WHERE google_user_id = ?', [accessToken, expiry, googleUserId]);
   saveDb();
 }
 
-export async function updateSpreadsheetId(sessionId: string, spreadsheetId: string) {
+export async function updateAccountSpreadsheetId(googleUserId: string, spreadsheetId: string) {
   const d = await getDb();
-  d.run('UPDATE sessions SET spreadsheet_id = ? WHERE session_id = ?', [spreadsheetId, sessionId]);
+  d.run('UPDATE accounts SET spreadsheet_id = ? WHERE google_user_id = ?', [spreadsheetId, googleUserId]);
   saveDb();
 }

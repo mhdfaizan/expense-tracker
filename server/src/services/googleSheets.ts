@@ -1,5 +1,5 @@
 import { google } from 'googleapis';
-import { getSession, updateTokens } from '../db';
+import { getAccount, updateAccountTokens } from '../db';
 
 const SCOPES = [
   'https://www.googleapis.com/auth/spreadsheets',
@@ -29,56 +29,52 @@ export function getAuthUrl(): string {
 export async function exchangeCode(code: string) {
   const oauth2Client = getOAuth2Client();
   const { tokens } = await oauth2Client.getToken(code);
-  return tokens;
+
+  // Decode id_token to extract Google user ID (sub claim)
+  let googleUserId: string | undefined;
+  if (tokens.id_token) {
+    const payload = JSON.parse(Buffer.from(tokens.id_token.split('.')[1], 'base64').toString());
+    googleUserId = payload.sub;
+  }
+
+  return { tokens, googleUserId };
 }
 
-export async function getAuthenticatedClient(sessionId: string) {
-  const session = await getSession(sessionId);
-  if (!session) throw new Error('No session found');
+export async function getAuthenticatedClient(googleUserId: string) {
+  const account = await getAccount(googleUserId);
+  if (!account) throw new Error('No account found');
 
   const oauth2Client = getOAuth2Client();
   oauth2Client.setCredentials({
-    access_token: session.access_token,
-    refresh_token: session.refresh_token,
+    access_token: account.access_token,
+    refresh_token: account.refresh_token,
   });
 
   oauth2Client.on('tokens', (tokens) => {
     if (tokens.access_token && tokens.expiry_date) {
-      updateTokens(sessionId, tokens.access_token, Math.floor((tokens.expiry_date - Date.now()) / 1000));
+      updateAccountTokens(googleUserId, tokens.access_token, Math.floor((tokens.expiry_date - Date.now()) / 1000));
     }
   });
 
   return google.sheets({ version: 'v4', auth: oauth2Client });
 }
 
-export async function createExpenseSheet(sessionId: string): Promise<string> {
-  const oauth2Client = getOAuth2Client();
-  const session = await getSession(sessionId);
-  if (!session) throw new Error('No session found');
+export async function createExpenseSheet(googleUserId: string): Promise<string> {
+  const account = await getAccount(googleUserId);
+  if (!account) throw new Error('No account found');
 
-  oauth2Client.setCredentials({
-    access_token: session.access_token,
-    refresh_token: session.refresh_token,
-  });
-
-  const drive = google.drive({ version: 'v3', auth: oauth2Client });
-  const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
-
-  // Check if user already has an Expense Tracker spreadsheet
-  const existing = await drive.files.list({
-    q: "name='Expense Tracker' and mimeType='application/vnd.google-apps.spreadsheet' and trashed=false",
-    fields: 'files(id, name)',
-    spaces: 'drive',
-  });
-
-  if (existing.data.files && existing.data.files.length > 0) {
-    const existingId = existing.data.files[0].id!;
-    const sheetInfo = await sheets.spreadsheets.get({ spreadsheetId: existingId });
-    const sheetNames = sheetInfo.data.sheets?.map(s => s.properties?.title) || [];
-    if (sheetNames.includes('Expenses') && sheetNames.includes('Categories')) {
-      return existingId;
-    }
+  // If user already has a spreadsheet, return it
+  if (account.spreadsheet_id) {
+    return account.spreadsheet_id;
   }
+
+  const oauth2Client = getOAuth2Client();
+  oauth2Client.setCredentials({
+    access_token: account.access_token,
+    refresh_token: account.refresh_token,
+  });
+
+  const sheets = google.sheets({ version: 'v4', auth: oauth2Client });
 
   const spreadsheet = await sheets.spreadsheets.create({
     requestBody: {
@@ -110,19 +106,19 @@ export async function createExpenseSheet(sessionId: string): Promise<string> {
 }
 
 export async function appendExpense(
-  sessionId: string,
+  googleUserId: string,
   date: string,
   item: string,
   cost: number,
   category: string,
   id: string
 ) {
-  const sheets = await getAuthenticatedClient(sessionId);
-  const session = await getSession(sessionId);
-  if (!session?.spreadsheet_id) throw new Error('No spreadsheet found');
+  const sheets = await getAuthenticatedClient(googleUserId);
+  const account = await getAccount(googleUserId);
+  if (!account?.spreadsheet_id) throw new Error('No spreadsheet found');
 
   await sheets.spreadsheets.values.append({
-    spreadsheetId: session.spreadsheet_id,
+    spreadsheetId: account.spreadsheet_id,
     range: 'Expenses!A:E',
     valueInputOption: 'USER_ENTERED',
     insertDataOption: 'INSERT_ROWS',
@@ -130,13 +126,13 @@ export async function appendExpense(
   });
 }
 
-export async function getExpenses(sessionId: string, dateFilter?: string) {
-  const sheets = await getAuthenticatedClient(sessionId);
-  const session = await getSession(sessionId);
-  if (!session?.spreadsheet_id) return [];
+export async function getExpenses(googleUserId: string, dateFilter?: string) {
+  const sheets = await getAuthenticatedClient(googleUserId);
+  const account = await getAccount(googleUserId);
+  if (!account?.spreadsheet_id) return [];
 
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: session.spreadsheet_id,
+    spreadsheetId: account.spreadsheet_id,
     range: 'Expenses!A:E',
   });
 
@@ -158,13 +154,13 @@ export async function getExpenses(sessionId: string, dateFilter?: string) {
   return data.sort((a, b) => b.date.localeCompare(a.date));
 }
 
-export async function deleteExpense(sessionId: string, expenseId: string) {
-  const sheets = await getAuthenticatedClient(sessionId);
-  const session = await getSession(sessionId);
-  if (!session?.spreadsheet_id) throw new Error('No spreadsheet found');
+export async function deleteExpense(googleUserId: string, expenseId: string) {
+  const sheets = await getAuthenticatedClient(googleUserId);
+  const account = await getAccount(googleUserId);
+  if (!account?.spreadsheet_id) throw new Error('No spreadsheet found');
 
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: session.spreadsheet_id,
+    spreadsheetId: account.spreadsheet_id,
     range: 'Expenses!A:E',
   });
 
@@ -173,18 +169,18 @@ export async function deleteExpense(sessionId: string, expenseId: string) {
   if (rowIndex < 0) throw new Error('Expense not found');
 
   await sheets.spreadsheets.values.clear({
-    spreadsheetId: session.spreadsheet_id,
+    spreadsheetId: account.spreadsheet_id,
     range: `Expenses!A${rowIndex + 1}:E${rowIndex + 1}`,
   });
 }
 
-export async function getCategories(sessionId: string) {
-  const sheets = await getAuthenticatedClient(sessionId);
-  const session = await getSession(sessionId);
-  if (!session?.spreadsheet_id) return DEFAULT_CATEGORIES;
+export async function getCategories(googleUserId: string) {
+  const sheets = await getAuthenticatedClient(googleUserId);
+  const account = await getAccount(googleUserId);
+  if (!account?.spreadsheet_id) return DEFAULT_CATEGORIES;
 
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: session.spreadsheet_id,
+    spreadsheetId: account.spreadsheet_id,
     range: 'Categories!A:A',
   });
 
@@ -193,13 +189,13 @@ export async function getCategories(sessionId: string) {
   return categories.length ? categories : DEFAULT_CATEGORIES;
 }
 
-export async function addCategory(sessionId: string, name: string) {
-  const sheets = await getAuthenticatedClient(sessionId);
-  const session = await getSession(sessionId);
-  if (!session?.spreadsheet_id) throw new Error('No spreadsheet found');
+export async function addCategory(googleUserId: string, name: string) {
+  const sheets = await getAuthenticatedClient(googleUserId);
+  const account = await getAccount(googleUserId);
+  if (!account?.spreadsheet_id) throw new Error('No spreadsheet found');
 
   await sheets.spreadsheets.values.append({
-    spreadsheetId: session.spreadsheet_id,
+    spreadsheetId: account.spreadsheet_id,
     range: 'Categories!A:A',
     valueInputOption: 'USER_ENTERED',
     insertDataOption: 'INSERT_ROWS',
@@ -207,13 +203,13 @@ export async function addCategory(sessionId: string, name: string) {
   });
 }
 
-export async function deleteCategory(sessionId: string, name: string) {
-  const sheets = await getAuthenticatedClient(sessionId);
-  const session = await getSession(sessionId);
-  if (!session?.spreadsheet_id) throw new Error('No spreadsheet found');
+export async function deleteCategory(googleUserId: string, name: string) {
+  const sheets = await getAuthenticatedClient(googleUserId);
+  const account = await getAccount(googleUserId);
+  if (!account?.spreadsheet_id) throw new Error('No spreadsheet found');
 
   const response = await sheets.spreadsheets.values.get({
-    spreadsheetId: session.spreadsheet_id,
+    spreadsheetId: account.spreadsheet_id,
     range: 'Categories!A:A',
   });
 
@@ -222,7 +218,7 @@ export async function deleteCategory(sessionId: string, name: string) {
   if (rowIndex < 0) return;
 
   await sheets.spreadsheets.values.clear({
-    spreadsheetId: session.spreadsheet_id,
+    spreadsheetId: account.spreadsheet_id,
     range: `Categories!A${rowIndex + 1}`,
   });
 }
